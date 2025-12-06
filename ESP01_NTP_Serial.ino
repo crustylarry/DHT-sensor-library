@@ -1,5 +1,5 @@
 /*
- * ESP-01 (ESP8266) NTP Serial Clock
+ * ESP-01 (ESP8266) NTP Serial Clock - Eastern Time (EST/EDT)
  *
  * This sketch connects the ESP-01 to WiFi, retrieves the time from an NTP server,
  * and outputs the current date and time via the Serial port (USB).
@@ -14,9 +14,9 @@
  * 3. Upload to the ESP-01.
  * 4. Open Serial Monitor at 115200 baud to see the time.
  *
- * NOTE:
- * This sketch acts as an NTP *Client* that "serves" the time to the
- * computer via the Serial connection.
+ * TIMEZONE:
+ * This sketch is configured for Eastern Time (New York, etc.).
+ * It handles Standard Time (EST) and Daylight Saving Time (EDT) automatically.
  */
 
 #include <ESP8266WiFi.h>
@@ -28,20 +28,17 @@
 const char* ssid     = "YOUR_WIFI_SSID";
 const char* password = "YOUR_WIFI_PASSWORD";
 
-// Timezone configuration
-// For offset, typically use seconds. Example: GMT+1 = 3600
-// DST rules are handled by the TZ string if using configTzTime,
-// but configTime is simpler for basic usage.
-// Here we use UTC (0 offset). Change gmtOffset_sec for your timezone.
-const long  gmtOffset_sec = 0;
-const int   daylightOffset_sec = 0;
+// Timezone string for Eastern Time (USA/Canada)
+// EST = UTC-5, EDT = UTC-4
+// DST starts 2nd Sunday in March, ends 1st Sunday in November
+const char* TZ_INFO  = "EST5EDT,M3.2.0,M11.1.0";
 
 void setup() {
   // Initialize Serial port
   // ESP-01 transmits on the TX pin, which goes to RX on the USB adapter.
   Serial.begin(115200);
   delay(100);
-  Serial.println("\n\nESP-01 NTP Serial Clock");
+  Serial.println("\n\nESP-01 NTP Serial Clock (Eastern Time)");
 
   // Connect to WiFi
   Serial.print("Connecting to WiFi: ");
@@ -57,16 +54,19 @@ void setup() {
   Serial.println(WiFi.localIP());
 
   // Configure Time
-  // configTime(gmt_offset, daylight_offset, ntp_server1, ntp_server2, ...)
+  // 1. Set timezone using setenv (Standard POSIX way, works on ESP8266)
+  setenv("TZ", TZ_INFO, 1);
+  tzset();
+
+  // 2. Configure NTP servers
+  // We use 0 offsets here because the TZ environment variable handles the shift.
   Serial.println("Initializing NTP...");
-  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
 
   // Wait for time to be set
   Serial.print("Waiting for NTP time sync");
   time_t now = time(nullptr);
-  while (now < 8 * 3600 * 2) { // Wait until time is > roughly year 2015?
-    // actually epoch 0 is 1970. Checks if time is valid (not 0 or near 0).
-    // A simple check is usually while(time(nullptr) < 1000)
+  while (now < 8 * 3600 * 2) {
     delay(500);
     Serial.print(".");
     now = time(nullptr);
@@ -82,7 +82,6 @@ void loop() {
   char timeString[50];
 
   // Format: YYYY-MM-DD HH:MM:SS
-  // See strftime documentation for other formats
   strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", timeinfo);
 
   Serial.println(timeString);
